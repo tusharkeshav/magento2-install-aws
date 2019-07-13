@@ -1,0 +1,16 @@
+upstream fastcgi_backend {
+         server  unix:/run/php/php7.1-fpm.sock;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    index  index.php index.html index.htm;
+    server_name  dev.magento.com;
+   
+    client_max_body_size 100M;
+
+    set $MAGE_ROOT /var/www/magento2;
+    set $MAGE_MODE developer;
+    include /var/www/magento2/nginx.conf.sample;
+}

@@ -1,0 +1,181 @@
+#this is used to install magento on server
+---
+ - hosts: xxx
+   sudo: yes 
+   tasks:
+   #installing nginx
+    - name: update
+      apt: update_cache=yes
+    - name: upgrading the packages
+      apt: name='*' state=latest
+    - name: install nginx
+      apt: name=nginx state=present
+    - name: nginx service start
+      service: name=nginx enabled=yes state=restarted
+    # #Installing php7.1 via repo
+    - name: installing software-properties-common
+      apt: name=software-properties-common
+    - name: adding php ondrej repo
+      apt_repository: repo='ppa:ondrej/php' update_cache=yes  # a repo for php. we can alos use php7.2fpm install
+    - name: apt update
+      apt: update_cache=yes
+    - name: upgrading the packages
+      apt: name='*' state=latest
+    - name: installing php and its dependencies
+      apt: name={{ item }} state=present
+      with_items:
+        - php7.1-fpm
+        - php7.1-cli
+        - php7.1-common
+        - php7.1-gd
+        - php7.1-curl
+        - php7.1-mysql
+        - php7.1-intl
+        - php7.1-fpm
+        - php7.1-mcrypt
+        - php7.1-xsl
+        - php7.1-zip
+        - php7.1-mbstring
+        - php7.1-mcrypt
+        - php7.1-soap
+        - php7.1-bcmath
+        - php7.1-xml
+
+    #incresing values in /etc/php/7.1/cli/php/.ini file
+    - name: increasing memory limit
+      lineinfile: dest=/etc/php/7.1/cli/php.ini regex='max_execution_time = *' line='max_execution_time = 1800'
+    - name: changing mempry limit
+      lineinfile: dest=/etc/php/7.1/cli/php.ini regex='memory_limit = *' line='memory_limit = 2G'
+    - name: changing zlib.output_compression on
+      lineinfile: dest=/etc/php/7.1/cli/php.ini regex='zlib.output_compression = *' line='zlib.output_compression = On'
+     # incresing values in fpm file
+    - name: incresing memory limit
+      lineinfile: dest=/etc/php/7.1/fpm/php.ini regex='max_execution_time = *' line='max_execution_time = 1800'
+    - name: changing mempry limit
+      lineinfile: dest=/etc/php/7.1/fpm/php.ini regex='memory_limit = *' line='memory_limit = 2G'
+    - name: changing zlib.output_compression on
+      lineinfile: dest=/etc/php/7.1/fpm/php.ini regex='zlib.output_compression = *' line='zlib.output_compression = On'
+    
+    #srarting php service
+    - name: start php service
+      systemd: name=php7.1-fpm state=restarted enabled=yes masked=no
+    - name: start php service
+      service: name=php7.1-fpm state=reloaded enabled=yes
+    
+    #install mysql-server
+    - name: install mysql 
+      apt: name=mysql-server state=present
+    - name: start mysql service         #starting mysql service and if masked then it is said to false
+      systemd: name=mysql state=started enabled=yes masked=no
+    - name: start service mysql         
+      service: name=mysql state=restarted enabled=yes
+
+    #After isntalling mysql we have to install some mysql dependies e.g pymsql
+    - name: installing python for pymsql
+      apt: name=python state=present update_cache=yes install_recommends=yes
+
+    - name: installing python-apt for pymsql
+      apt: name=python-apt state=present update_cache=yes install_recommends=yes
+
+    - name: installing python_pip for pymysql
+      apt: name=python-pip state=present update_cache=yes install_recommends=yes
+
+    #installing some python dependencies
+    - name: installing python-dev
+      apt: name=python-dev state=present
+    - name : libmysqlclient-dev
+      apt: name=libmysqlclient-dev state=present
+    - name: installing python3
+      apt: name=python3
+    - name: installing python3-pip
+      apt: name=python3-pip
+  
+    - name: installing pip from pip
+      pip: name=pip state=present
+      sudo: yes
+    - name: installing pymysql using pip
+      pip: name=pymysql
+      sudo: yes
+
+    - name: restart myqsl service
+      service: name=mysql state=restarted
+
+    #This script import database to the remote server. Here we just had to change the source file path and destination
+    # - name: copying the database to directory in cloud
+    #   copy: src=~/intern/cloud/ansible/sql_demo.sql dest=/tmp
+    # - name: importing_mysql_database
+    #   mysql_db: name=my_db state=import target=/tmp/sql_demo.sql login_unix_socket=/var/run/mysqld/mysqld.sock
+    #   sudo: yes
+
+    #Creating database for magento
+    - name: magento database
+      mysql_db: name=magento state=present login_unix_socket=/var/run/mysqld/mysqld.sock 
+    - name: creating user for magento
+      mysql_user: name=magento password='magento' login_unix_socket=/var/run/mysqld/mysqld.sock priv='*.*:ALL,GRANT' state=present
+
+    #installing composer for magento installation
+    - name: composer install
+      apt: name=composer state=present
+    
+    #making directory if dont exist
+    - name: make direcoty /var/www
+      command: mkdir -p /var/www/
+    - name: downloading_magento
+      get_url: url=https://github.com/magento/magento2/archive/2.2.4.tar.gz dest=/var/www/
+    - name: extracting magento files to magento2
+      unarchive: src=/var/www/magento2-2.2.4.tar.gz dest=/var/www/ remote_src=yes
+    - name: renaming magento extratedfolder magento2-2.2.4 to magento
+      command: mv /var/www/magento2-2.2.4 /var/www/magento2
+
+    #Installing magento using composer
+    - name: magento install using composer
+      command: chdir=/var/www/magento2 composer install -v
+    
+    # #stoping nginx service
+    - name: stopping nginx service
+      systemd: name=nginx state=stopped
+
+    #copying magento file to aws
+    - name: copy_magento_file_to_awss         # copy a base file to site-availiable
+      copy: src=magento dest=/etc/nginx/sites-available/
+    
+    # #linking file to site-enabled
+    - name: linking file to site enabled 
+      command: ln -s /etc/nginx/sites-available/magento /etc/nginx/sites-enabled/
+      ignore_errors: yes
+
+    - name: giving owner and group
+      command: chown -R ubuntu:www-data /var/www/magento2/
+    - name: change permission
+      file: path=/var/www/magento2 state=directory mode='0775'
+      
+    #running nginx service
+    - name: run nginx service
+      service: name=nginx state=restarted
+    #installing magento
+    #Note: change the base url, user password, and other things
+    - name: bin install
+      command: chdir=/var/www/magento2 php bin/magento setup:install --backend-frontname="adminlogin" \
+                                                  --base-url=http://dev.magento.com/ \
+                                                  --db-host=localhost \
+                                                  --db-name=magento \
+                                                  --db-user=magento \
+                                                  --db-password=magento \
+                                                  --admin-firstname=First  \
+                                                  --admin-lastname=Last \
+                                                  --admin-email=user@myMagentoSite.com \
+                                                  --admin-user=admin \
+                                                  --admin-password=admin123 \
+                                                  --language=en_US \
+                                                  --currency=USD \
+                                                  --timezone=America/Chicago \
+                                                  --use-rewrites=1
+      
+      
+    - name: restart service
+      service: name=nginx state=restarted
+    - name: restart php7.1
+      service: name=php7.1-fpm state=restarted
+    - name: setting permission
+      command: chown -R ubuntu:www-data /var/www/magento2/
+      
