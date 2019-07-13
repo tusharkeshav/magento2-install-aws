@@ -1,8 +1,9 @@
 # magento-install-aws
 One click to install magento remotely using ansible.
 
-# Testes using:
+# Tested using:
  Ubuntu (remotely on aws)
+ kali(local)
  Python 2.7,
  ansible 2.8.1
  
