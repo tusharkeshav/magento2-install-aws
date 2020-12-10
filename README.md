@@ -1,4 +1,4 @@
-# magento-install-aws
+# One Touch Magento(OTM)
 One click to install magento remotely using ansible.
 
 # Tested using:
